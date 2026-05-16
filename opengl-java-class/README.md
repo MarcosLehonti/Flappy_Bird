@@ -364,3 +364,133 @@ Esto permite crear un efecto visual tipo *parallax*, donde los objetos cercanos 
 
 Además, las montañas se desplazan continuamente hacia la izquierda junto con el escenario y se reciclan automáticamente al salir de pantalla, permitiendo crear un fondo infinito sin necesidad de generar nuevas estructuras constantemente.
 
+
+## ==========================================================================================================
+## ==========================================================================================================
+
+# Menú Principal — Flappy Bird
+
+La clase `Menu` implementa la pantalla principal del juego utilizando LWJGL y OpenGL.
+
+El sistema renderiza completamente la interfaz de manera manual mediante primitivas gráficas básicas como rectángulos, círculos y triángulos, sin utilizar motores gráficos externos ni librerías de UI.
+
+## Características
+
+- Pantalla inicial interactiva.
+- Selección de:
+  - `1 Jugador`
+  - `2 Jugadores`
+- Navegación mediante teclado:
+  - `↑` y `↓` para cambiar opción
+  - `SPACE` y `ENTER` para confirmar
+  - `W` como acceso rápido al modo multijugador
+- Animación flotante de pájaros decorativos.
+- Sistema personalizado de texto digital estilo arcade.
+- Renderizado manual usando OpenGL.
+
+---
+
+# Sistema de Renderizado
+
+El menú está construido usando primitivas OpenGL:
+
+| Elemento | Método |
+|---|---|
+| Panel principal | `dibujarRect()` |
+| Texto digital | `dibujarLetras()` |
+| Letras especiales | `dibujarLetraEspecial()` |
+| Pájaros decorativos | `dibujarPajaroDecorativo()` |
+| Círculos | `dibujarCirculo()` |
+| Triángulos | `dibujarTriangulo()` |
+
+---
+
+# Sistema de Letras
+
+El texto del menú utiliza un sistema de caracteres tipo “7 segmentos”, donde cada letra se forma activando combinaciones de segmentos rectangulares.
+
+Esto permite renderizar texto completamente con OpenGL sin usar fuentes externas.
+
+También se implementaron letras especiales (`b`, `r`, `d`, `W`) para mejorar la apariencia visual del título y controles.
+
+---
+
+# Animaciones
+
+Los pájaros decorativos utilizan movimiento senoidal:
+
+```java
+Math.sin(tiempoAnimacion * 2.5f)
+
+
+
+
+
+
+# 🎮 Controles del Juego
+
+El juego cuenta con dos modos seleccionables desde el menú principal:
+
+- **1 Jugador**
+- **2 Jugadores**
+
+La selección se realiza directamente desde el menú interactivo del juego.
+
+---
+
+# 🕹️ Controles del Menú
+
+| Tecla | Acción |
+|---|---|
+| ⬆️ / ⬇️ | Navegar entre opciones |
+| `SPACE` | Seleccionar opción actual |
+| `W` | Atajo directo para iniciar modo 2 jugadores |
+| `ENTER` | Confirmar opción seleccionada |
+
+---
+
+# 👤 Modo 1 Jugador
+
+En este modo, un solo jugador controla al pájaro.
+
+| Tecla | Acción |
+|---|---|
+| `SPACE` | Hacer saltar al pájaro |
+
+---
+
+# 👥 Modo 2 Jugadores
+
+En el modo multijugador, cada jugador tiene su propia tecla de control.
+
+| Jugador | Tecla | Acción |
+|---|---|---|
+| Jugador 1 | `SPACE` | Saltar |
+| Jugador 2 | `W` | Saltar |
+
+---
+
+# Reinicio y Regreso al Menú
+
+Cuando la partida termina:
+
+| Tecla | Acción |
+|---|---|
+| `SPACE` | Reiniciar la partida |
+| `R` | Volver al menú principal |
+
+---
+
+# Características del Menú
+
+El menú principal incluye:
+
+- Título digital estilo retro **FLAPPY BIRD**
+- Sistema visual de selección
+- Animaciones de pájaros decorativos
+- Indicadores de opción activa
+- Navegación con teclado
+- Soporte para 1 y 2 jugadores
+- Renderizado completamente con OpenGL y LWJGL
+
+---

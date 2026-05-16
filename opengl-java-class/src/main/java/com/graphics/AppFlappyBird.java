@@ -20,13 +20,17 @@ import org.lwjgl.stb.STBImage;
  * AppFlappyBird:
  * Mini-juego estilo Flappy Bird con OpenGL 2D (NDC directo, sin texturas).
  *
+ * Flujo de pantallas:
+ *   MENU → JUGANDO → GAME OVER → MENU (con R) o reinicio directo (SPACE)
+ *
  * Orden de capas (fondo → frente):
  *   1. Fondo azul (glClearColor)
  *   2. Nubes
  *   3. Montañas
  *   4. Tuberías
  *   5. Pájaros
- *   6. Overlay game over
+ *   6. HUD de puntaje
+ *   7. Overlay game over
  */
 public class AppFlappyBird {
 
@@ -68,21 +72,27 @@ public class AppFlappyBird {
     private Montanas montanas;
     private int      textureGameOver;
 
-    //tabla de score
+    // HUD de puntaje
     private Hud hud;
+
+    // *** MENÚ DE INICIO ***
+    private Menu   menu;
+    private boolean enMenu    = true;   // true = mostrando menú
+    private boolean dosJugadores = false; // modo elegido
 
     // Pájaros.
     private Bird bird1;
     private Bird bird2;
 
     // Estado del juego.
-    private float        timerSpawn;
-    private int          puntaje;
-    private int          puntaje2;
-    private boolean      started;
-    private boolean      gameOver;
-    private boolean      prevSpace;
-    private boolean      prevR;
+    private float   timerSpawn;
+    private int     puntaje;
+    private int     puntaje2;
+    private boolean started;
+    private boolean gameOver;
+    private boolean prevSpace;
+    private boolean prevR;
+    private boolean prevM;   // para volver al menú con M
 
     // Lista de obstáculos activos.
     private final List<Tuberia> tuberias = new ArrayList<>();
@@ -107,7 +117,6 @@ public class AppFlappyBird {
 
     public void run() {
         init();
-        resetGame();
         loop();
         cleanup();
     }
@@ -146,7 +155,7 @@ public class AppFlappyBird {
         nubes = new Nubes();
         nubes.init("src/main/resources/nube.png");
 
-        // Montañas — necesita los uniforms y el vaoTriangulo ya creados.
+        // Montañas.
         montanas = new Montanas();
         montanas.init(
             uOffsetLocation,
@@ -156,7 +165,7 @@ public class AppFlappyBird {
             vaoTriangulo
         );
 
-        //tablero de score
+        // HUD de puntaje.
         hud = new Hud(
             uOffsetLocation,
             uScaleLocation,
@@ -165,9 +174,21 @@ public class AppFlappyBird {
             vao
         );
 
+        // *** MENÚ — se crea una sola vez y se reutiliza ***
+        menu = new Menu(
+            window,
+            uOffsetLocation,
+            uScaleLocation,
+            uColorLocation,
+            uRotationLocation,
+            vao,
+            vaoCirculo,
+            vaoTriangulo
+        );
+
         cargarTexturaGameOver("src/main/resources/gameover.jpg");
 
-        // Pájaros.
+        // Pájaros (se crean una vez; reset() los reinicia).
         bird1 = new Bird(
             BIRD_X,  0.0f,
             0.98f, 0.85f, 0.20f,
@@ -180,6 +201,10 @@ public class AppFlappyBird {
             uOffsetLocation, uScaleLocation, uColorLocation, uRotationLocation,
             vao, vaoCirculo, vaoTriangulo
         );
+
+        // Arranca en el menú.
+        enMenu = true;
+        actualizarTituloMenu();
     }
 
     // ---------------------------------------------------------------
@@ -370,29 +395,70 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
+    // Títulos de ventana
+    // ---------------------------------------------------------------
+
+    private void actualizarTituloMenu() {
+        GLFW.glfwSetWindowTitle(window,
+            "Flappy Bird — MENU | FLECHAS para navegar | SPACE/ENTER para elegir");
+    }
+
+    private void actualizarTitulo() {
+        String base = "Jugador 1: " + puntaje + " | Jugador 2: " + puntaje2;
+        if (!started)      GLFW.glfwSetWindowTitle(window, base + " | SPACE para empezar");
+        else if (gameOver) GLFW.glfwSetWindowTitle(window,
+            base + " | GAME OVER - SPACE/R para volver al menú | M = Menú");
+        else               GLFW.glfwSetWindowTitle(window, base + " | M = Menú");
+    }
+
+    // ---------------------------------------------------------------
     // Input
     // ---------------------------------------------------------------
+
+    /** Centraliza la lógica de volver al menú. */
+    private void irAlMenu() {
+        enMenu = true;
+        menu.reset();
+        actualizarTituloMenu();
+    }
 
     private void procesarInput() {
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
             GLFW.glfwSetWindowShouldClose(window, true);
         }
 
+        // --- Tecla M: volver al menú en cualquier momento ---
+        boolean mAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_M) == GLFW.GLFW_PRESS;
+        if (mAhora && !prevM) {
+            irAlMenu();
+        }
+        prevM = mAhora;
+
+        // --- Teclas de juego ---
         boolean spaceAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
         if (spaceAhora && !prevSpace) {
-            if (gameOver) { resetGame(); started = true; }
-            else            started = true;
-            bird1.saltar();
+            if (gameOver) {
+                // SPACE en game over → volver al menú para elegir modo
+                irAlMenu();
+            } else {
+                started = true;
+                bird1.saltar();
+            }
         }
         prevSpace = spaceAhora;
 
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_W) == GLFW.GLFW_PRESS) {
-            started = true;
-            bird2.saltar();
+            if (dosJugadores) {
+                started = true;
+                bird2.saltar();
+            }
         }
 
         boolean rAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_R) == GLFW.GLFW_PRESS;
-        if (rAhora && !prevR && gameOver) resetGame();
+        if (rAhora && !prevR && gameOver) {
+            // R en game over → volver al menú para elegir modo
+            irAlMenu();
+        }
         prevR = rAhora;
     }
 
@@ -404,9 +470,12 @@ public class AppFlappyBird {
         if (!started || gameOver) return;
 
         bird1.actualizar(dt);
-        bird2.actualizar(dt);
+        if (dosJugadores) bird2.actualizar(dt);
 
-        if (!bird1.estaVivo() && !bird2.estaVivo()) {
+        boolean bird1Muerto = !bird1.estaVivo();
+        boolean bird2Muerto = !dosJugadores || !bird2.estaVivo();
+
+        if (bird1Muerto && bird2Muerto) {
             gameOver = true;
             actualizarTitulo();
             return;
@@ -423,56 +492,42 @@ public class AppFlappyBird {
             Tuberia t = it.next();
             t.x -= VELOCIDAD_TUBERIAS * dt;
 
-        if (
-            bird1.estaVivo() &&
-            t.x + (TUBERIA_ANCHO * 0.5f) < bird1.getX() &&
-            !t.puntuada
-        ) {
-            t.puntuada = true;
-            puntaje++;
-
-            VELOCIDAD_TUBERIAS =
-                0.62f + (puntaje / 10) * 0.15f;
-
-            actualizarTitulo();
-        }
-
-        if (
-            bird2.estaVivo() &&
-            t.x + (TUBERIA_ANCHO * 0.5f) < bird2.getX() &&
-            !t.puntuada2
-        ) {
-            t.puntuada2 = true;
-            puntaje2++;
-
-            actualizarTitulo();
-        }
-
             if (
                 bird1.estaVivo() &&
-                bird1.colisionaConTuberia(
-                    t.x,
-                    TUBERIA_ANCHO,
-                    t.gapCentroY,
-                    GAP_ALTO
-                )
+                t.x + (TUBERIA_ANCHO * 0.5f) < bird1.getX() &&
+                !t.puntuada
             ) {
+                t.puntuada = true;
+                puntaje++;
+                VELOCIDAD_TUBERIAS = 0.62f + (puntaje / 10) * 0.15f;
+                actualizarTitulo();
+            }
+
+            if (
+                dosJugadores &&
+                bird2.estaVivo() &&
+                t.x + (TUBERIA_ANCHO * 0.5f) < bird2.getX() &&
+                !t.puntuada2
+            ) {
+                t.puntuada2 = true;
+                puntaje2++;
+                actualizarTitulo();
+            }
+
+            if (bird1.estaVivo() &&
+                bird1.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
                 bird1.morir();
             }
 
-            if (
+            if (dosJugadores &&
                 bird2.estaVivo() &&
-                bird2.colisionaConTuberia(
-                    t.x,
-                    TUBERIA_ANCHO,
-                    t.gapCentroY,
-                    GAP_ALTO
-                )
-            ) {
+                bird2.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
                 bird2.morir();
             }
 
-            if (!bird1.estaVivo() && !bird2.estaVivo()) {
+            boolean p1Muerto = !bird1.estaVivo();
+            boolean p2Muerto = !dosJugadores || !bird2.estaVivo();
+            if (p1Muerto && p2Muerto) {
                 gameOver = true;
                 actualizarTitulo();
                 return;
@@ -491,7 +546,7 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
-    // Render  —  orden de capas de fondo a frente
+    // Render — orden de capas de fondo a frente
     // ---------------------------------------------------------------
 
     private void render() {
@@ -504,7 +559,7 @@ public class AppFlappyBird {
         // 2. Nubes.
         nubes.render(vao, uUsarTexturaLocation);
 
-        // 3. Montañas (delante de nubes, detrás de tuberías).
+        // 3. Montañas.
         GL20.glUseProgram(programa);
         montanas.render();
 
@@ -543,14 +598,10 @@ public class AppFlappyBird {
 
         // 5. Pájaros.
         bird1.render();
-        bird2.render();
+        if (dosJugadores) bird2.render();
 
-        // 6. tablero de puntaje
-        hud.render(
-            puntaje,
-            puntaje2,
-            VELOCIDAD_TUBERIAS
-        );
+        // 6. HUD de puntaje.
+        hud.render(puntaje, puntaje2, VELOCIDAD_TUBERIAS);
 
         // 7. Overlay game over.
         if (gameOver) {
@@ -566,7 +617,8 @@ public class AppFlappyBird {
         }
     }
 
-    private void dibujarRect(float x, float y, float ancho, float alto, float r, float g, float b) {
+    private void dibujarRect(float x, float y, float ancho, float alto,
+                              float r, float g, float b) {
         GL20.glUniform1f(uRotationLocation, 0.0f);
         GL20.glUniform2f(uOffsetLocation, x, y);
         GL20.glUniform2f(uScaleLocation, ancho, alto);
@@ -575,33 +627,55 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
-    // Título
-    // ---------------------------------------------------------------
-
-    private void actualizarTitulo() {
-        String base = "Jugador 1: " + puntaje + " | Jugador 2: " + puntaje2;
-        if (!started)      GLFW.glfwSetWindowTitle(window, base + " | SPACE para empezar");
-        else if (gameOver) GLFW.glfwSetWindowTitle(window, base + " | GAME OVER - SPACE o R para reiniciar");
-        else               GLFW.glfwSetWindowTitle(window, base);
-    }
-
-    // ---------------------------------------------------------------
     // Bucle principal
     // ---------------------------------------------------------------
 
     private void loop() {
         float ultimoTiempo = (float) GLFW.glfwGetTime();
+
         while (!GLFW.glfwWindowShouldClose(window)) {
             float ahora = (float) GLFW.glfwGetTime();
             float dt    = Math.min(ahora - ultimoTiempo, 0.033f);
             ultimoTiempo = ahora;
 
+            GLFW.glfwPollEvents();
+
+            // *** Bloque de MENÚ ***
+            if (enMenu) {
+                // ESC cierra
+                if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
+                    GLFW.glfwSetWindowShouldClose(window, true);
+                    continue;
+                }
+
+                GL20.glUseProgram(programa);
+                menu.procesarInput(dt);
+                menu.render();
+
+                if (menu.isFinished()) {
+                    // El usuario eligió un modo → arrancar el juego
+                    dosJugadores = menu.esDosJugadores();
+                    enMenu = false;
+                    resetGame();
+                }
+
+                GLFW.glfwSwapBuffers(window);
+                continue;
+            }
+
+            // *** Bloque de JUEGO ***
             procesarInput();
+
+            // Si procesarInput() volvió al menú, saltar render del juego
+            if (enMenu) {
+                GLFW.glfwSwapBuffers(window);
+                continue;
+            }
+
             actualizar(dt);
             render();
 
             GLFW.glfwSwapBuffers(window);
-            GLFW.glfwPollEvents();
         }
     }
 
