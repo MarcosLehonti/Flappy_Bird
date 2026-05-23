@@ -21,7 +21,7 @@ import org.lwjgl.stb.STBImage;
  * Mini-juego estilo Flappy Bird con OpenGL 2D (NDC directo, sin texturas).
  *
  * Flujo de pantallas:
- *   MENU → JUGANDO → GAME OVER → MENU (con R) o reinicio directo (SPACE)
+ *   MENU → JUGANDO → GAME OVER → MENU (con R o SPACE)
  *
  * Orden de capas (fondo → frente):
  *   1. Fondo azul (glClearColor)
@@ -41,11 +41,12 @@ public class AppFlappyBird {
     // Posiciones horizontales fijas de cada pájaro en NDC.
     private static final float BIRD_X  = -0.45f;
     private static final float BIRD2_X = -0.65f;
-
+    private static final float BIRD3_X = -0.25f;
+    
     // Parámetros de tuberías.
     private static final float TUBERIA_ANCHO         = 0.18f;
     private static final float GAP_ALTO              = 0.48f;
-    private float               VELOCIDAD_TUBERIAS   = 0.62f;
+    private float              VELOCIDAD_TUBERIAS   = 0.62f;
     private static final float TIEMPO_ENTRE_TUBERIAS = 1.5f;
     private static final float GAP_MIN_CENTRO        = -0.45f;
     private static final float GAP_MAX_CENTRO        =  0.45f;
@@ -68,7 +69,7 @@ public class AppFlappyBird {
     private int uUsarTexturaLocation;
 
     // Escenario.
-    private Nubes    nubes;
+    private Nubes  nubes;
     private Montanas montanas;
     private int      textureGameOver;
 
@@ -77,26 +78,29 @@ public class AppFlappyBird {
 
     // *** MENÚ DE INICIO ***
     private Menu   menu;
-    private boolean enMenu    = true;   // true = mostrando menú
-    private boolean dosJugadores = false; // modo elegido
+    private boolean enMenu        = true;   
+    private boolean dosJugadores  = false; 
+    private boolean tresJugadores = false; 
 
     // Pájaros.
     private Bird bird1;
     private Bird bird2;
+    private Bird bird3; // Nuevo jugador 
 
     // Estado del juego.
-    private float   timerSpawn;
-    private int     puntaje;
-    private int     puntaje2;
+    private float  timerSpawn;
+    private int    puntaje;
+    private int    puntaje2;
+    private int    puntaje3; // Tercer puntaje añadido
     private boolean started;
     private boolean gameOver;
     private boolean prevSpace;
     private boolean prevR;
-    private boolean prevM;   // para volver al menú con M
+    private boolean prevM;   
 
     // Lista de obstáculos activos.
     private final List<Tuberia> tuberias = new ArrayList<>();
-    private final Random        random   = new Random();
+    private final Random         random   = new Random();
 
     /** Modelo de una tubería. */
     private static class Tuberia {
@@ -104,6 +108,7 @@ public class AppFlappyBird {
         float   gapCentroY;
         boolean puntuada;
         boolean puntuada2;
+        boolean puntuada3; // Flag de puntuación para el jugador 3
 
         Tuberia(float x, float gapCentroY) {
             this.x          = x;
@@ -130,6 +135,7 @@ public class AppFlappyBird {
             throw new IllegalStateException("No se pudo iniciar GLFW");
         }
 
+        // Configuración de la ventana OpenGL 3.3 Core Profile
         GLFW.glfwDefaultWindowHints();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE,               GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_RESIZABLE,             GLFW.GLFW_TRUE);
@@ -151,11 +157,11 @@ public class AppFlappyBird {
         crearCirculoBase();
         crearTrianguloBase();
 
-        // Nubes.
+        // Inicializar Nubes
         nubes = new Nubes();
         nubes.init("src/main/resources/nube.png");
 
-        // Montañas.
+        // Inicializar Montañas
         montanas = new Montanas();
         montanas.init(
             uOffsetLocation,
@@ -165,7 +171,7 @@ public class AppFlappyBird {
             vaoTriangulo
         );
 
-        // HUD de puntaje.
+        // Inicializar HUD de puntaje
         hud = new Hud(
             uOffsetLocation,
             uScaleLocation,
@@ -174,7 +180,7 @@ public class AppFlappyBird {
             vao
         );
 
-        // *** MENÚ — se crea una sola vez y se reutiliza ***
+        // Inicializar Menú
         menu = new Menu(
             window,
             uOffsetLocation,
@@ -188,21 +194,29 @@ public class AppFlappyBird {
 
         cargarTexturaGameOver("src/main/resources/gameover.jpg");
 
-        // Pájaros (se crean una vez; reset() los reinicia).
+        // Crear los tres pájaros con sus posiciones iniciales fijas y colores distintivos
+        // Jugador 1: Amarillo
         bird1 = new Bird(
             BIRD_X,  0.0f,
             0.98f, 0.85f, 0.20f,
             uOffsetLocation, uScaleLocation, uColorLocation, uRotationLocation,
             vao, vaoCirculo, vaoTriangulo
         );
+        // Jugador 2: Azul celeste
         bird2 = new Bird(
             BIRD2_X, 0.25f,
-            0.2f, 0.8f, 1.0f,
+            0.20f, 0.80f, 1.00f,
+            uOffsetLocation, uScaleLocation, uColorLocation, uRotationLocation,
+            vao, vaoCirculo, vaoTriangulo
+        );
+        // Jugador 3: Rojo/Coral
+        bird3 = new Bird(
+            BIRD3_X, -0.25f,
+            1.00f, 0.30f, 0.30f,
             uOffsetLocation, uScaleLocation, uColorLocation, uRotationLocation,
             vao, vaoCirculo, vaoTriangulo
         );
 
-        // Arranca en el menú.
         enMenu = true;
         actualizarTituloMenu();
     }
@@ -214,7 +228,6 @@ public class AppFlappyBird {
     private void crearShaders() {
         String vertexSrc = """
             #version 330 core
-
             layout (location = 0) in vec3 aPos;
             layout (location = 1) in vec2 aTexCoord;
 
@@ -384,9 +397,11 @@ public class AppFlappyBird {
     private void resetGame() {
         bird1.reset(0.0f);
         bird2.reset(0.25f);
+        bird3.reset(-0.25f);
         timerSpawn         = 0.0f;
         puntaje            = 0;
         puntaje2           = 0;
+        puntaje3           = 0;
         VELOCIDAD_TUBERIAS = 0.62f;
         started            = false;
         gameOver           = false;
@@ -404,10 +419,16 @@ public class AppFlappyBird {
     }
 
     private void actualizarTitulo() {
-        String base = "Jugador 1: " + puntaje + " | Jugador 2: " + puntaje2;
+        String base = "P1: " + puntaje;
+        if (dosJugadores || tresJugadores) {
+            base += " | P2: " + puntaje2;
+        }
+        if (tresJugadores) {
+            base += " | P3: " + puntaje3;
+        }
+
         if (!started)      GLFW.glfwSetWindowTitle(window, base + " | SPACE para empezar");
-        else if (gameOver) GLFW.glfwSetWindowTitle(window,
-            base + " | GAME OVER - SPACE/R para volver al menú | M = Menú");
+        else if (gameOver) GLFW.glfwSetWindowTitle(window, base + " | GAME OVER - SPACE/R para volver al menú | M = Menú");
         else               GLFW.glfwSetWindowTitle(window, base + " | M = Menú");
     }
 
@@ -415,7 +436,6 @@ public class AppFlappyBird {
     // Input
     // ---------------------------------------------------------------
 
-    /** Centraliza la lógica de volver al menú. */
     private void irAlMenu() {
         enMenu = true;
         menu.reset();
@@ -424,116 +444,146 @@ public class AppFlappyBird {
 
     private void procesarInput() {
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
+            // Cerrar el juego de manera limpia
             GLFW.glfwSetWindowShouldClose(window, true);
         }
 
-        // --- Tecla M: volver al menú en cualquier momento ---
+        // Tecla M: Volver al menú
         boolean mAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_M) == GLFW.GLFW_PRESS;
         if (mAhora && !prevM) {
             irAlMenu();
         }
         prevM = mAhora;
 
-        // --- Teclas de juego ---
+        // --- Teclas de control para saltos ---
         boolean spaceAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
         if (spaceAhora && !prevSpace) {
             if (gameOver) {
-                // SPACE en game over → volver al menú para elegir modo
                 irAlMenu();
             } else {
                 started = true;
-                bird1.saltar();
+                bird1.saltar(); // J1 Salta con SPACE
             }
         }
         prevSpace = spaceAhora;
 
+        // J2 Salta con W (disponible en modo 2 y 3 jugadores)
         if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_W) == GLFW.GLFW_PRESS) {
-            if (dosJugadores) {
+            if (dosJugadores || tresJugadores) {
                 started = true;
                 bird2.saltar();
             }
         }
 
+        // J3 Salta con Flecha ARRIBA (disponible solo en modo 3 jugadores)
+        if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_UP) == GLFW.GLFW_PRESS) {
+            if (tresJugadores) {
+                started = true;
+                bird3.saltar();
+            }
+        }
+
+        // Tecla R para regresar desde Game Over
         boolean rAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_R) == GLFW.GLFW_PRESS;
         if (rAhora && !prevR && gameOver) {
-            // R en game over → volver al menú para elegir modo
             irAlMenu();
         }
         prevR = rAhora;
     }
 
     // ---------------------------------------------------------------
-    // Lógica de juego
+    // Lógica de juego (Actualización)
     // ---------------------------------------------------------------
 
     private void actualizar(float dt) {
         if (!started || gameOver) return;
 
-        bird1.actualizar(dt);
-        if (dosJugadores) bird2.actualizar(dt);
+        // Actualizar pájaros activos
+        if (bird1.estaVivo()) bird1.actualizar(dt);
+        if ((dosJugadores || tresJugadores) && bird2.estaVivo()) bird2.actualizar(dt);
+        if (tresJugadores && bird3.estaVivo()) bird3.actualizar(dt);
 
+        // Evaluar estados de muerte según el modo elegido
         boolean bird1Muerto = !bird1.estaVivo();
-        boolean bird2Muerto = !dosJugadores || !bird2.estaVivo();
+        boolean bird2Muerto = (!dosJugadores && !tresJugadores) || !bird2.estaVivo();
+        boolean bird3Muerto = !tresJugadores || !bird3.estaVivo();
 
-        if (bird1Muerto && bird2Muerto) {
+        // El juego termina SOLÓ cuando todos los competidores del modo mueren
+        if (bird1Muerto && bird2Muerto && bird3Muerto) {
             gameOver = true;
             actualizarTitulo();
             return;
         }
 
+        // Control del temporizador para spawnear obstáculos
         timerSpawn += dt;
         if (timerSpawn >= TIEMPO_ENTRE_TUBERIAS) {
             timerSpawn = 0.0f;
             spawnTuberia();
         }
 
+        // Procesar tuberías activas
         Iterator<Tuberia> it = tuberias.iterator();
         while (it.hasNext()) {
             Tuberia t = it.next();
             t.x -= VELOCIDAD_TUBERIAS * dt;
 
-            if (
-                bird1.estaVivo() &&
-                t.x + (TUBERIA_ANCHO * 0.5f) < bird1.getX() &&
-                !t.puntuada
-            ) {
+            // --- Lógica de puntaje individual ---
+            if (bird1.estaVivo() && t.x + (TUBERIA_ANCHO * 0.5f) < bird1.getX() && !t.puntuada) {
                 t.puntuada = true;
                 puntaje++;
-                VELOCIDAD_TUBERIAS = 0.62f + (puntaje / 10) * 0.15f;
+                VELOCIDAD_TUBERIAS = 0.62f + ((puntaje + puntaje2 + puntaje3) / 15) * 0.12f; // Velocidad
                 actualizarTitulo();
+
+                //CONDICIONAL DE ACABAR EL JUEGO
+                if (puntaje >= 10) {
+                    gameOver = true;
+                    actualizarTitulo();
+                    return;
+                }
             }
 
-            if (
-                dosJugadores &&
-                bird2.estaVivo() &&
-                t.x + (TUBERIA_ANCHO * 0.5f) < bird2.getX() &&
-                !t.puntuada2
-            ) {
+            if ((dosJugadores || tresJugadores) && bird2.estaVivo() && t.x + (TUBERIA_ANCHO * 0.5f) < bird2.getX() && !t.puntuada2) {
                 t.puntuada2 = true;
                 puntaje2++;
                 actualizarTitulo();
+                //CONDICINAL DE ACBAR EL JUEGO
+                if (puntaje >= 10) {
+                    gameOver = true;
+                    actualizarTitulo();
+                    return;
+                }
             }
 
-            if (bird1.estaVivo() &&
-                bird1.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
+            if (tresJugadores && bird3.estaVivo() && t.x + (TUBERIA_ANCHO * 0.5f) < bird3.getX() && !t.puntuada3) {
+                t.puntuada3 = true;
+                puntaje3++;
+                actualizarTitulo();
+                //CONDICIONAL DE ACABAR EL JUEGO
+                if (puntaje >= 10) {
+                    gameOver = true;
+                    actualizarTitulo();
+                    return;
+                }
+            }
+
+            // --- Lógica de Colisiones por cada pájaro ---
+            if (bird1.estaVivo() && bird1.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
                 bird1.morir();
             }
 
-            if (dosJugadores &&
-                bird2.estaVivo() &&
-                bird2.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
+            if ((dosJugadores || tresJugadores) && bird2.estaVivo() && bird2.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
                 bird2.morir();
             }
 
-            boolean p1Muerto = !bird1.estaVivo();
-            boolean p2Muerto = !dosJugadores || !bird2.estaVivo();
-            if (p1Muerto && p2Muerto) {
-                gameOver = true;
-                actualizarTitulo();
-                return;
+            if (tresJugadores && bird3.estaVivo() && bird3.colisionaConTuberia(t.x, TUBERIA_ANCHO, t.gapCentroY, GAP_ALTO)) {
+                bird3.morir();
             }
 
-            if (t.x + (TUBERIA_ANCHO * 0.5f) < -1.3f) it.remove();
+            // Eliminar tuberías fuera del plano visible de NDC
+            if (t.x + (TUBERIA_ANCHO * 0.5f) < -1.3f) {
+                it.remove();
+            }
         }
 
         nubes.actualizar(dt, VELOCIDAD_TUBERIAS);
@@ -546,24 +596,24 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
-    // Render — orden de capas de fondo a frente
+    // Renderizado por capas
     // ---------------------------------------------------------------
 
     private void render() {
-        // 1. Fondo azul cielo.
+        // 1. Limpieza de pantalla con azul cielo
         GL11.glClearColor(0.52f, 0.80f, 0.92f, 1.0f);
         GL11.glClear(GL11.GL_COLOR_BUFFER_BIT);
 
         GL20.glUseProgram(programa);
 
-        // 2. Nubes.
+        // 2. Nubes
         nubes.render(vao, uUsarTexturaLocation);
 
-        // 3. Montañas.
+        // 3. Montañas
         GL20.glUseProgram(programa);
         montanas.render();
 
-        // 4. Tuberías.
+        // 4. Render de las Tuberías
         GL20.glUseProgram(programa);
         GL30.glBindVertexArray(vao);
 
@@ -571,39 +621,51 @@ public class AppFlappyBird {
             float gapTop    = t.gapCentroY + (GAP_ALTO * 0.5f);
             float gapBottom = t.gapCentroY - (GAP_ALTO * 0.5f);
 
+            // Tubo Superior
             float altoSuperior = 1.0f - gapTop;
             if (altoSuperior > 0.0f) {
                 float yCentroSup = gapTop + (altoSuperior * 0.5f);
                 dibujarRect(t.x, yCentroSup, TUBERIA_ANCHO, altoSuperior, 0.18f, 0.70f, 0.25f);
                 float luzAncho = TUBERIA_ANCHO * 0.12f;
-                dibujarRect(t.x + (TUBERIA_ANCHO * 0.5f) - (luzAncho * 0.5f), yCentroSup, luzAncho, altoSuperior, 0.45f, 0.90f, 0.45f);
-                dibujarRect(t.x - (TUBERIA_ANCHO * 0.5f) + (luzAncho * 0.5f), yCentroSup, luzAncho, altoSuperior, 0.08f, 0.40f, 0.12f);
+                dibujarRect(t.x + (TUBERIA_ANCHO * 0.5f) - (luzAncho * 0.5f), yCentroSup, luzAncho, altoSuperior, 0.45f, 0.90f, 0.45f);//luz
+                dibujarRect(t.x - (TUBERIA_ANCHO * 0.5f) + (luzAncho * 0.5f), yCentroSup, luzAncho, altoSuperior, 0.08f, 0.40f, 0.12f);//sombra
                 float bocaAlto = 0.035f;
                 dibujarRect(t.x, gapTop + (bocaAlto * 0.5f), TUBERIA_ANCHO + 0.01f, bocaAlto, 0.05f, 0.28f, 0.08f);
                 dibujarRect(t.x, gapTop + bocaAlto + 0.012f, TUBERIA_ANCHO * 0.6f, 0.008f, 0.55f, 0.95f, 0.55f);
             }
 
+            // Tubo Inferior
             float altoInferior = gapBottom + 1.0f;
             if (altoInferior > 0.0f) {
                 float yCentroInf = -1.0f + (altoInferior * 0.5f);
                 dibujarRect(t.x, yCentroInf, TUBERIA_ANCHO, altoInferior, 0.18f, 0.70f, 0.25f);
                 float luzAncho = TUBERIA_ANCHO * 0.12f;
-                dibujarRect(t.x + (TUBERIA_ANCHO * 0.5f) - (luzAncho * 0.5f), yCentroInf, luzAncho, altoInferior, 0.45f, 0.90f, 0.45f);
-                dibujarRect(t.x - (TUBERIA_ANCHO * 0.5f) + (luzAncho * 0.5f), yCentroInf, luzAncho, altoInferior, 0.08f, 0.40f, 0.12f);
+                dibujarRect(t.x + (TUBERIA_ANCHO * 0.5f) - (luzAncho * 0.5f), yCentroInf, luzAncho, altoInferior, 0.45f, 0.90f, 0.45f);//luz
+                dibujarRect(t.x - (TUBERIA_ANCHO * 0.5f) + (luzAncho * 0.5f), yCentroInf, luzAncho, altoInferior, 0.08f, 0.40f, 0.12f);//sombra
                 float bocaAlto = 0.035f;
                 dibujarRect(t.x, gapBottom - (bocaAlto * 0.5f), TUBERIA_ANCHO + 0.01f, bocaAlto, 0.05f, 0.28f, 0.08f);
                 dibujarRect(t.x, gapBottom - bocaAlto - 0.012f, TUBERIA_ANCHO * 0.6f, 0.008f, 0.55f, 0.95f, 0.55f);
             }
         }
 
-        // 5. Pájaros.
+        // 5. Render de Pájaros (Solo si corresponden al modo de juego)
         bird1.render();
-        if (dosJugadores) bird2.render();
+        if (dosJugadores || tresJugadores) {
+            bird2.render();
+        }
+        if (tresJugadores) {
+            bird3.render();
+        }
 
-        // 6. HUD de puntaje.
-        hud.render(puntaje, puntaje2, VELOCIDAD_TUBERIAS);
+        // 6. HUD de puntaje (Adaptado internamente si pasás los puntajes correspondientes)
+        hud.render(
+            puntaje,
+            puntaje2,
+            puntaje3,
+            VELOCIDAD_TUBERIAS
+        );
 
-        // 7. Overlay game over.
+        // 7. Render de Game Over Overlay
         if (gameOver) {
             GL30.glBindVertexArray(vao);
             dibujarRect(0.0f, 0.0f, 2.0f, 0.45f, 0.02f, 0.02f, 0.02f);
@@ -618,7 +680,7 @@ public class AppFlappyBird {
     }
 
     private void dibujarRect(float x, float y, float ancho, float alto,
-                              float r, float g, float b) {
+                             float r, float g, float b) {
         GL20.glUniform1f(uRotationLocation, 0.0f);
         GL20.glUniform2f(uOffsetLocation, x, y);
         GL20.glUniform2f(uScaleLocation, ancho, alto);
@@ -627,7 +689,7 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
-    // Bucle principal
+    // Bucle principal de GLFW
     // ---------------------------------------------------------------
 
     private void loop() {
@@ -640,9 +702,8 @@ public class AppFlappyBird {
 
             GLFW.glfwPollEvents();
 
-            // *** Bloque de MENÚ ***
+            // Bloque del menú principal
             if (enMenu) {
-                // ESC cierra
                 if (GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ESCAPE) == GLFW.GLFW_PRESS) {
                     GLFW.glfwSetWindowShouldClose(window, true);
                     continue;
@@ -653,8 +714,8 @@ public class AppFlappyBird {
                 menu.render();
 
                 if (menu.isFinished()) {
-                    // El usuario eligió un modo → arrancar el juego
                     dosJugadores = menu.esDosJugadores();
+                    tresJugadores = menu.esTresJugadores();
                     enMenu = false;
                     resetGame();
                 }
@@ -663,10 +724,9 @@ public class AppFlappyBird {
                 continue;
             }
 
-            // *** Bloque de JUEGO ***
+            // Bloque interactivo del juego activo
             procesarInput();
 
-            // Si procesarInput() volvió al menú, saltar render del juego
             if (enMenu) {
                 GLFW.glfwSwapBuffers(window);
                 continue;
@@ -680,7 +740,7 @@ public class AppFlappyBird {
     }
 
     // ---------------------------------------------------------------
-    // Limpieza
+    // Destrucción de Contexto
     // ---------------------------------------------------------------
 
     private void cleanup() {

@@ -47,7 +47,8 @@ public class Menu {
     public enum Modo {
         NINGUNO,
         UN_JUGADOR,
-        DOS_JUGADORES
+        DOS_JUGADORES,
+        TRES_JUGADORES
     }
 
     // -------------------------------------------------------
@@ -72,6 +73,9 @@ public class Menu {
     private Modo modoElegido = Modo.NINGUNO;
 
     // Opción resaltada: 0 = 1 jugador, 1 = 2 jugadores
+    // 0 = 1 jugador
+    // 1 = 2 jugadores
+    // 2 = 3 jugadores
     private int opcionSeleccionada = 0;
 
     // Para detectar flancos de tecla (evitar repetición)
@@ -122,6 +126,10 @@ public class Menu {
         return modoElegido == Modo.DOS_JUGADORES;
     }
 
+    public boolean esTresJugadores() {
+        return modoElegido == Modo.TRES_JUGADORES;
+    }
+
     /** Reinicia el menú para volver a mostrarlo. */
     public void reset() {
         modoElegido          = Modo.NINGUNO;
@@ -141,19 +149,32 @@ public class Menu {
         boolean upAhora   = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_UP)   == GLFW.GLFW_PRESS;
         boolean downAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_DOWN)  == GLFW.GLFW_PRESS;
 
-        if (upAhora && !prevUp)     opcionSeleccionada = 0;
-        if (downAhora && !prevDown) opcionSeleccionada = 1;
+        if (upAhora && !prevUp) {
+            opcionSeleccionada--;
+            if (opcionSeleccionada < 0) opcionSeleccionada = 2;
+        }
 
+        if (downAhora && !prevDown) {
+            opcionSeleccionada++;
+            if (opcionSeleccionada > 2) opcionSeleccionada = 0;
+        }
         prevUp   = upAhora;
         prevDown = downAhora;
 
         // SPACE → siempre confirma opción 0 (1 jugador) o la opción resaltada
         boolean spaceAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_SPACE) == GLFW.GLFW_PRESS;
         if (spaceAhora && !prevSpace) {
+
             if (opcionSeleccionada == 0) {
                 modoElegido = Modo.UN_JUGADOR;
-            } else {
+            }
+
+            else if (opcionSeleccionada == 1) {
                 modoElegido = Modo.DOS_JUGADORES;
+            }
+
+            else if (opcionSeleccionada == 2) {
+                modoElegido = Modo.TRES_JUGADORES;
             }
         }
         prevSpace = spaceAhora;
@@ -168,11 +189,18 @@ public class Menu {
 
         // ENTER → confirma la opción resaltada
         boolean enterAhora = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ENTER) == GLFW.GLFW_PRESS;
-        if (enterAhora && !prevEnter) {
+        if (spaceAhora && !prevSpace) {
+
             if (opcionSeleccionada == 0) {
                 modoElegido = Modo.UN_JUGADOR;
-            } else {
+            }
+
+            else if (opcionSeleccionada == 1) {
                 modoElegido = Modo.DOS_JUGADORES;
+            }
+
+            else if (opcionSeleccionada == 2) {
+                modoElegido = Modo.TRES_JUGADORES;
             }
         }
         prevEnter = enterAhora;
@@ -274,6 +302,30 @@ public class Menu {
         dibujarLetraEspecial('W', -0.55f, -0.69f, 0.025f, 0.70f, 0.70f, 0.70f);
         dibujarLetras(" SPACE", -0.55f + 0.025f * 1.6f * 2, -0.69f,
                     0.025f, 0.70f, 0.70f, 0.70f);
+        
+                    
+    // ---------------------------------------------------
+    // Opción 3: 3 JUGADORES
+    // ---------------------------------------------------
+
+    boolean op3Sel = (opcionSeleccionada == 2);
+
+    float r3 = op3Sel ? 1.00f : 0.15f;
+    float g3 = op3Sel ? 0.20f : 0.15f;
+    float b3 = op3Sel ? 0.20f : 0.15f;
+
+    dibujarRect(0.0f, -0.78f, 1.30f, 0.13f, r3, g3, b3);
+
+    if (op3Sel) {
+        dibujarRect(0.0f, -0.78f, 1.32f, 0.15f, 1.0f, 1.0f, 0.0f);
+        dibujarRect(0.0f, -0.78f, 1.30f, 0.13f, r3, g3, b3);
+    }
+
+    float tc3 = op3Sel ? 1.0f : 0.8f;
+
+    dibujarNumeroSimple(3, -0.55f, -0.78f, 0.040f, tc3, tc3, tc3);
+
+    dibujarLetras("JUGADORES", -0.35f, -0.78f, 0.040f, tc3, tc3, tc3);                
         // ---------------------------------------------------
         // Instrucción de navegación al fondo
         // ---------------------------------------------------
